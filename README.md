@@ -1,1 +1,5 @@
-https://github.com/Surfingman/Template/blob/main/domain-join-windows11: This is a script for creating a Windows client VM in Azure and joining it to a domain
+If you are only joining the domain while creating the VM, use this template. 
+
+If you are joining the domain and then adding a specific domain user account to the local administrators group while creating the VM, use this template along with the PowerShell script.
+
+
