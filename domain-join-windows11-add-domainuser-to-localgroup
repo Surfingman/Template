@@ -1,0 +1,215 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the virtual machine."
+      }
+    },
+    "existingVNetResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the resource group that contains the existing virtual network."
+      }
+    },
+    "existingVNetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the existing virtual network."
+      }
+    },
+    "existingSubnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the existing subnet."
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the domain to which the VM will be joined."
+      }
+    },
+    "domainJoinUser": {
+      "type": "string",
+      "metadata": {
+        "description": "The username of an account with permissions to join the VM to the domain."
+      }
+    },
+    "domainJoinPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The password of the account with permissions to join the VM to the domain."
+      }
+    },
+    "domainJoinOU": {
+      "type": "string",
+      "metadata": {
+        "description": "The organizational unit (OU) where the VM will be placed after joining the domain."
+      }
+    },
+    "domainJoinRestart": {
+      "type": "string",
+      "defaultValue": "true",
+      "allowedValues": [
+        "true",
+        "false"
+      ],
+      "metadata": {
+        "description": "Specifies whether the VM should be restarted after joining the domain."
+      }
+    },
+    "domainJoinOptions": {
+      "type": "string",
+      "defaultValue": "3",
+      "metadata": {
+        "description": "Specifies additional options for joining the domain."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "The location where the resources will be deployed."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "The administrator username for the virtual machine."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The administrator password for the virtual machine."
+      }
+    },
+    "domainAdminUserToAdd": {
+      "type": "string",
+      "metadata": {
+        "description": "The domain account to be added to the Local Administrators group."
+      }
+    }
+  },
+  "variables": {
+    "vmSize": "Standard_DS2_v2",
+    "storageAccountType": "Standard_LRS",
+    "osDiskName": "[concat(parameters('vmName'), '_os_disk')]",
+    "existingVNetId": "[resourceId(parameters('existingVNetResourceGroup'), 'Microsoft.Network/virtualNetworks', parameters('existingVNetName'))]",
+    "existingSubnetId": "[concat(variables('existingVNetId'), '/subnets/', parameters('existingSubnetName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2021-03-01",
+      "name": "[parameters('vmName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('vmSize')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsDesktop",
+            "offer": "windows-11",
+            "sku": "win11-22h2-pro",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "[variables('storageAccountType')]"
+            },
+            "name": "[variables('osDiskName')]"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmName'), '_nic'))]"
+            }
+          ]
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": true
+          },
+          "secrets": []
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2021-02-01",
+      "name": "[concat(parameters('vmName'), '_nic')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('existingSubnetId')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(parameters('vmName'), '/DomainJoin')]",
+      "apiVersion": "2019-07-01",
+      "location": "[parameters('location')]",
+      "condition": "[not(empty(parameters('domainName')))]",
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Compute",
+        "type": "JsonADDomainExtension",
+        "typeHandlerVersion": "1.3",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "Name": "[parameters('domainName')]",
+          "User": "[parameters('domainJoinUser')]",
+          "OUPath": "[parameters('domainJoinOU')]",
+          "Restart": "[parameters('domainJoinRestart')]",
+          "Options": "[parameters('domainJoinOptions')]"
+        },
+        "protectedSettings": {
+          "Password": "[parameters('domainJoinPassword')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(parameters('vmName'), '/AddAdmin')]",
+      "apiVersion": "2021-03-01",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'), '/DomainJoin')]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Compute",
+        "type": "CustomScriptExtension",
+        "typeHandlerVersion": "1.10",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "https://raw.githubusercontent.com/your-github-account/your-repository/main/add-domain-admin.ps1"
+          ],
+          "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File add-domain-admin.ps1 -domainAdmin ', parameters('domainAdminUserToAdd'))]"
+        }
+      }
+    }
+  ]
+}
