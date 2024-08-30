@@ -196,7 +196,7 @@
       "apiVersion": "2021-03-01",
       "location": "[parameters('location')]",
       "dependsOn": [
-        "[concat('Microsoft.Compute/virtualMachines/', parameters('vmName'), '/DomainJoin')]"
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', parameters('vmName'), 'DomainJoin')]"
       ],
       "properties": {
         "publisher": "Microsoft.Compute",
@@ -205,7 +205,7 @@
         "autoUpgradeMinorVersion": true,
         "settings": {
           "fileUris": [
-            "https://github.com/Surfingman/Template/blob/main/add-domain-admin.ps1"
+            "https://raw.githubusercontent.com/your-github-account/your-repository/main/add-domain-admin.ps1"
           ],
           "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File add-domain-admin.ps1 -domainAdmin ', parameters('domainAdminUserToAdd'))]"
         }
